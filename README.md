@@ -3,29 +3,37 @@
 
 ## RLHF
 https://github.com/modelscope/modelscope-classroom/blob/main/LLM-tutorial/M.%E4%BA%BA%E7%B1%BB%E5%81%8F%E5%A5%BD%E5%AF%B9%E9%BD%90%E8%AE%AD%E7%BB%83.md
+
 ### PPO
 https://zhuanlan.zhihu.com/p/677607581
+
 ### DPO
 https://zhuanlan.zhihu.com/p/642569664
+
 ### KTO
-https://zhuanlan.zhihu.com/p/695992165
+https://zhuanlan.zhihu.com/p/695992165x
 
 对正负样本进行了加权；DPO里面是使用正负样本的reward差值进行sigmoid映射，但是KTO里面使用reward模型与KL散度之间的差异
+
 ### SimPO
 https://www.thepaper.cn/newsDetail_forward_27513961
 
 采用了与生成指标直接对齐的隐式奖励形式，从而消除了对参考模型的需求。此外，其还引入了一个目标奖励差额 γ 来分离获胜和失败响应
 
+### GRPO
+https://zhuanlan.zhihu.com/p/20565045592
+
+### Reward Model是怎么训练的
+https://zhuanlan.zhihu.com/p/595579042
 
 ## Advanced RAG
-### 分层索引检索
-利用文档摘要创建多层索引，优先检索与查询最相关的摘要部分，再深入到详细文档，提高检索效率
-### query改写
-### 使用假设文档嵌入修正查询与文档的非对称性 (HyDE)
-在检索前，生成一个与用户查询相关的假设文档，并使用这个文档的嵌入来替代用户的查询进行语义搜索
-### 相关文档重排或者直接用LLM打分
-### 压缩搜索结果
-### 加入反思
++ 分层索引检索，利用文档摘要创建多层索引，优先检索与查询最相关的摘要部分，再深入到详细文档，提高检索效率
++ query改写
++ 使用假设文档嵌入修正查询与文档的非对称性 (HyDE)
++ 在检索前，生成一个与用户查询相关的假设文档，并使用这个文档的嵌入来替代用户的查询进行语义搜索
++ 相关文档重排或者直接用LLM打分
++ 压缩搜索结果
++ 加入反思
 
 ## LLM量化
 https://github.com/modelscope/modelscope-classroom/blob/main/LLM-tutorial/G.%E9%87%8F%E5%8C%96.md
@@ -174,3 +182,183 @@ DPO是一个off-policy的算法，因为训练DPO的pair数据不一定来自ref
 
 ### RLHF的performance上界是什么
 RLHF的performance上界就是rm模型的泛化上界
+
+## 我编的面试题（仅供参考）
+### dpo里面有reward model吗
+无
+
+### GRPO是on-policy还是off-policy
+同PPO，on-policy
+
+### deepseek V3中的MOE负载均衡是训练多久调整一次
+每个训练step
+
+## 除了力扣以外，面试可能会考察的Code
+### 多头注意力实现
+```python
+from math import sqrt
+import torch
+import torch.nn as nn
+
+class MultiHeadSelfAttention(nn.Module):
+    dim_in: int  # input dimension
+    dim_k: int   # key and query dimension
+    dim_v: int   # value dimension
+    num_heads: int  # number of heads, for each head, dim_* = dim_* // num_heads
+
+    def __init__(self, dim_in, dim_k, dim_v, num_heads=8):
+        super(MultiHeadSelfAttention, self).__init__()
+        assert dim_k % num_heads == 0 and dim_v % num_heads == 0, "dim_k and dim_v must be multiple of num_heads"
+        self.dim_in = dim_in
+        self.dim_k = dim_k
+        self.dim_v = dim_v
+        self.num_heads = num_heads
+        self.linear_q = nn.Linear(dim_in, dim_k, bias=False)
+        self.linear_k = nn.Linear(dim_in, dim_k, bias=False)
+        self.linear_v = nn.Linear(dim_in, dim_v, bias=False)
+        self._norm_fact = 1 / sqrt(dim_k // num_heads)
+
+    def forward(self, x):
+        # x: tensor of shape (batch, n, dim_in)
+        batch, n, dim_in = x.shape
+
+        nh = self.num_heads
+        dk = self.dim_k // nh  # dim_k of each head
+        dv = self.dim_v // nh  # dim_v of each head
+
+        q = self.linear_q(x).reshape(batch, n, nh, dk).transpose(1, 2)  # (batch, nh, n, dk)
+        k = self.linear_k(x).reshape(batch, n, nh, dk).transpose(1, 2)  # (batch, nh, n, dk)
+        v = self.linear_v(x).reshape(batch, n, nh, dv).transpose(1, 2)  # (batch, nh, n, dv)
+
+        dist = torch.matmul(q, k.transpose(2, 3)) * self._norm_fact  # batch, nh, n, n
+
+        mask = torch.triu(torch.ones(n, n), diagonal=0).bool()
+        dist = dist.masked_fill(mask, -float("inf"))
+
+        dist = torch.softmax(dist, dim=-1)  # batch, nh, n, n
+
+        att = torch.matmul(dist, v)  # batch, nh, n, dv
+        att = att.transpose(1, 2).reshape(batch, n, self.dim_v)  # batch, n, dim_v
+        return att
+```
+
+### Beam Search简易实现
+```python
+def beam_search_decoder(decoder, k, max_time_steps):
+    sequences = [[['<start>'], 1.0]]
+    re = []
+    while k and max_time_steps:
+        all_candidates = list()
+        for i in range(len(sequences)):
+            seq, score = sequences[i]
+            token_list, scores = decoder(seq)
+            for token, s in zip(token_list, scores):
+                candidate = [seq + [token], score * s]
+                all_candidates.append(candidate)
+        ordered = sorted(all_candidates, key=lambda tup: tup[1])  # 按score排序
+        sequences = ordered[-k:]  # 选择前k个最好的
+        tmp = []
+        for seq in sequences:
+            if seq[0][-1] == '<end>':
+                re.append(seq)
+                k -= 1
+            else:
+                tmp.append(seq)
+        sequences = tmp
+        max_time_steps -= 1
+    return sequences
+```
+
+### Transformer Position Embedding
+```python
+def get_positional_encoding(max_seq_len, embed_dim):
+    # embed_dim: 字嵌入的维度
+    # max_seq_len: 最大的序列长度
+    positional_encoding = np.array([
+        [pos / np.power(10000, 2 * i / embed_dim) for i in range(embed_dim)]
+        for pos in range(max_seq_len)])
+    
+    positional_encoding[1:, 0::2] = np.sin(positional_encoding[1:, 0::2])  # dim 2i 偶数
+    positional_encoding[1:, 1::2] = np.cos(positional_encoding[1:, 1::2])  # dim 2i+1 奇数
+    return positional_encoding
+```
+
+### MLM
+```python
+for index in mask_indices:
+	#80% of the time, replace with [MASK]
+	if random.random() < 0.8:
+		masked_token = "[MASK]"
+	else:
+		# 10% of the time, keep original
+		if random.random() < 0.5:
+			masked_token = tokens[index]
+		# 10% of the time, replace with random word
+		else:
+			masked_token = random.choice(vacab_list)
+```
+
+### numpy实现attention
+```python
+import numpy as np
+ 
+def masked_attention(query, key, value, mask=None):
+    # 计算点积
+    energy = np.matmul(query, key.T)
+    
+    # 如果提供了mask，则应用mask
+    if mask is not None:
+        energy[:, ~mask] = -np.inf  # 将mask外的点积结果设置为负无穷
+    
+    # 计算注意力权重
+    attention = np.softmax(energy, axis=1)
+    
+    # 将注意力权重应用于值
+    return np.matmul(attention, value)
+ 
+# 示例：
+query = np.random.rand(3, 10)
+key = np.random.rand(3, 10)
+value = np.random.rand(3, 10)
+mask = np.array([True, False, True])
+ 
+# 应用带mask的注意力
+result = masked_attention(query, key, value, mask=mask)
+ 
+print(result.shape)  # 输出结果的形状
+```
+
+### ELO评分
+```python
+from collections import defaultdict
+import pandas as pd
+
+def compute_online_elo(battles, K=4, SCALE=400, BASE=10, INIT_RATING=1000):
+    # Default rating initialization for each model
+    rating = defaultdict(lambda: INIT_RATING)
+    
+    # Iterate through the dataframe to update the Elo ratings
+    for rd, model_a, model_b, winner in battles[['model_a', 'model_b', 'winner']].itertuples():
+        ra = rating[model_a]
+        rb = rating[model_b]
+        
+        # Calculate expected outcomes for both models
+        ea = 1 / (1 + BASE ** ((rb - ra) / SCALE))
+        eb = 1 / (1 + BASE ** ((ra - rb) / SCALE))
+        
+        # Determine the actual score for model_a based on the winner
+        if winner == "model_a":
+            sa = 1  # model_a wins
+        elif winner == "model_b":
+            sa = 0  # model_b wins
+        elif winner == "tie":
+            sa = 0.5  # Tie
+        else:
+            raise Exception(f"unexpected vote {winner}")
+        
+        # Update ratings based on the outcome
+        rating[model_a] += K * (sa - ea)
+        rating[model_b] += K * ((1 - sa) - eb)
+    
+    return rating
+```
