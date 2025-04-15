@@ -175,7 +175,8 @@ DPO是一个off-policy的算法，因为训练DPO的pair数据不一定来自ref
 根据off-policy的定义，采样的网络和要优化的网络不是一个网络，那么对于PPO来说，使用一批数据从更新actor的第二个epoch开始，数据虽然都是旧的actor采样得到的，但是我们并没有直接使用这批数据去更新我们的新的actor，而是使用imporance sampling先将数据分布不同导致的误差进行了修正。那么这个importance sampling的目的就是让这两者数据分布之间的差异尽可能的缩小，那么就可以近似理解成做了importance sampling之后的数据就是我们的更新（这里的更新指的是多个epoch更新的中间过程）后的actor采样得来的，这样就可以理解成我们要优化得actor和采样得actor是同一个actor，那么他就是on-policy的。
 
 ### 可以跳过sft阶段直接进行rlhf吗
-现阶段来看是不太可能的。模型如果纯进行RL的话，搜索空间过于庞大，消耗资源较多，利用sft首先做模仿学习缩小搜索空间，再利用RLHF进行进一步对齐是必要的。
+<del>现阶段来看是不太可能的。模型如果纯进行RL的话，搜索空间过于庞大，消耗资源较多，利用sft首先做模仿学习缩小搜索空间，再利用RLHF进行进一步对齐是必要的。</del>
+参见DeepSeek的R1-Zero
 
 ### 同等MOE模型的loss能下降到和同等规模Dense模型的水准吗？
 不能，因为MOE在训练中每个token forward和backward的实际的激活参数是远少于同等规模的Dense 模型的（Btw，尽管Dense模型训练完也是个偏向sparse的模型，也就是有少量神经元被激活，但是在训练中，Dense模型是可以自由选择激活哪部分神经元的。而Sparse Moe，通过训练路由来控制哪个token激活哪部分的expert，本质差距还蛮远的）那么从DeepseekV2-MOE-236B来看，激活21B，总参 236B，等效一个 90B 的Dense，从Deepseek-Coder-MOE-16B，激活2.4B，总参数16B，等效于一个7B模型。（等效计算是和激活参数，总参数都挂钩的函数计算出来的。）
@@ -183,9 +184,12 @@ DPO是一个off-policy的算法，因为训练DPO的pair数据不一定来自ref
 ### RLHF的performance上界是什么
 RLHF的performance上界就是rm模型的泛化上界
 
-## 我编的面试题（仅供参考）
+## 很细节的面试题
 ### dpo里面有reward model吗
 无
+
+### dpo在一开始训练时的loss是多少
+看一下dpo公式就知道，由于一开始actor和reference是一样的，可以推算出loss是-log(sigmoid(0))
 
 ### GRPO是on-policy还是off-policy
 同PPO，on-policy
