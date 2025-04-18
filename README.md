@@ -23,6 +23,17 @@ https://www.thepaper.cn/newsDetail_forward_27513961
 ### GRPO
 https://zhuanlan.zhihu.com/p/20565045592
 
+### DAPO
+https://zhuanlan.zhihu.com/p/696537369
+
+相较于GRPO
++ 去掉了KL散度惩罚
++ clip的上下界不一样
++ GRPO是对每个回答的奖励除以回答中token的数量，然后在不同回答间做一个平均，而DAPO是对一个问题的所有回答的所有token的奖励求和，再除以总的token做一个平均
++ 正确答案的数量大于0且小于G，也就是G个回答不能没有正确答案，也不能全都是正确答案
++ 惩罚过长的回答
++ 不用模型来判断是否给予奖励，而是设置奖励机制判断答案是否正确来得到奖励，防止reward hacking
+
 ### Reward Model是怎么训练的
 https://zhuanlan.zhihu.com/p/595579042
 
@@ -193,6 +204,11 @@ RLHF的performance上界就是rm模型的泛化上界
 
 ### GRPO是on-policy还是off-policy
 同PPO，on-policy
+
+### GRPO存在的问题
++ 熵崩塌：策略（Policy）的熵值（Entropy）急剧下降，导致策略的随机性显著降低，智能体过早放弃探索，陷入局部最优的现象
++ 奖励噪声：环境或奖励函数中存在的不确定性或干扰信号，导致智能体收到的奖励R(s,a)，与实际动作价值偏离。噪声可能来自环境本身的不确定性，或人为设计的不合理奖励函数
++ 训练不稳定性：策略或价值函数的更新出现剧烈波动，导致训练曲线震荡、收敛缓慢甚至发散的现象
 
 ### deepseek V3中的MOE负载均衡是训练多久调整一次
 每个训练step
