@@ -348,6 +348,35 @@ result = masked_attention(query, key, value, mask=mask)
 print(result.shape)  # 输出结果的形状
 ```
 
+### numpy实现梯度反向传播
+```python
+import numpy as np
+
+# 生成模拟数据
+np.random.seed(42)
+true_k = 2.5
+true_b = 1.0
+x = np.linspace(0, 1, 100)
+y = true_k * x + true_b + np.random.normal(0, 0.1, size=x.shape)
+
+# 初始化参数
+k = np.random.randn()
+b = np.random.randn()
+
+learning_rate = 0.1
+epochs = 1000
+for epoch in range(epochs):
+    y_pred = k * x + b
+    loss = np.mean((y_pred - y)**2)
+    # 对k的梯度: dL/dk = 2 * (y_pred - y) * x
+    grad_k = 2 * np.mean((y_pred - y) * x)
+    # 对b的梯度: dL/db = 2 * (y_pred - y)
+    grad_b = 2 * np.mean(y_pred - y)
+    k -= learning_rate * grad_k
+    b -= learning_rate * grad_b
+print(f'\nFinal parameters: k = {k:.4f}, b = {b:.4f}')
+```
+
 ### ELO评分
 ```python
 from collections import defaultdict
