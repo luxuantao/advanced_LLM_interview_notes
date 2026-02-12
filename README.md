@@ -411,3 +411,8 @@ def compute_online_elo(battles, K=4, SCALE=400, BASE=10, INIT_RATING=1000):
     
     return rating
 ```
+
+## 数学题（概率统计、脑筋急转弯等）
+建议看量化绿皮书《A Practical Guide To Quantitative Finance Interviews》，有些题有中文翻译，英语好的直接看原版，也不是很难懂
+- https://blog.csdn.net/linshen1213/article/details/125060129
+- https://blog.csdn.net/rudyalwayhere/article/details/7349957
